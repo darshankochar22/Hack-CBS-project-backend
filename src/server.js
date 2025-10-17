@@ -39,7 +39,7 @@ app.use(
     ],
     credentials: true,
     methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
-    allowedHeaders: ["Content-Type", "Authorization"],
+    allowedHeaders: ["Content-Type", "Authorization", "x-api-key", "X-API-Key"],
   })
 );
 app.options("*", cors());
@@ -121,6 +121,145 @@ app.use("/usage", usageRoutes);
 
 // Public API routes (require API key authentication)
 app.use("/api", apiRoutes);
+
+// API Key validation endpoint for NPM package
+app.post("/api/validate-key", express.json(), async (req, res) => {
+  try {
+    const { projectId, apiKey } = req.body;
+    const headerApiKey = req.headers["x-api-key"];
+    const headerProjectId = req.headers["x-project-id"];
+
+    // Use header values if body values are not provided
+    const finalApiKey = apiKey || headerApiKey;
+    const finalProjectId = projectId || headerProjectId;
+
+    if (!finalApiKey || !finalProjectId) {
+      return res.status(400).json({
+        error: "Missing API key or Project ID",
+        message: "Both API key and Project ID are required",
+      });
+    }
+
+    // TODO: Validate against your database
+    // For now, we'll do basic validation
+    if (!finalApiKey.startsWith("pk_live_")) {
+      return res.status(401).json({
+        error: "Invalid API key format",
+        message: "API key must start with 'pk_live_'",
+      });
+    }
+
+    // Simulate project validation
+    console.log(`🔑 Validating API key for project: ${finalProjectId}`);
+
+    res.json({
+      success: true,
+      message: "API key and project ID validated successfully",
+      project: {
+        id: finalProjectId,
+        name: `Project ${finalProjectId}`,
+        status: "active",
+      },
+      apiKey: {
+        id: finalApiKey.substring(0, 20) + "...",
+        permissions: ["auth", "database", "storage"],
+      },
+    });
+  } catch (error) {
+    console.error("API key validation error:", error);
+    res.status(500).json({ error: "Failed to validate API key" });
+  }
+});
+
+// Usage tracking endpoint for NPM package
+app.post("/api/usage/track", express.json(), async (req, res) => {
+  try {
+    const {
+      packageVersion,
+      endpoint,
+      method,
+      responseTime,
+      statusCode,
+      timestamp,
+      projectId,
+      apiKey,
+      anonymousId,
+      source,
+      success,
+      responseSize,
+    } = req.body;
+
+    console.log(
+      `📊 Usage Track: ${method} ${endpoint} (${responseTime}ms) - ${statusCode} - Project: ${projectId}`
+    );
+
+    // Store usage data (you can save to database if needed)
+    const usageData = {
+      packageVersion,
+      endpoint,
+      method,
+      responseTime,
+      statusCode,
+      timestamp: new Date(timestamp),
+      projectId,
+      apiKey: apiKey.substring(0, 10) + "...", // Partial key for security
+      anonymousId,
+      source,
+      success,
+      responseSize,
+      receivedAt: new Date(),
+    };
+
+    // For now, just log it. You can save to database later
+    console.log("Usage data:", usageData);
+
+    res.json({ success: true, message: "Usage tracked successfully" });
+  } catch (error) {
+    console.error("Usage tracking error:", error);
+    res.status(500).json({ error: "Failed to track usage" });
+  }
+});
+
+// Legacy telemetry endpoint for backward compatibility
+app.post("/api/telemetry", express.json(), async (req, res) => {
+  try {
+    const {
+      packageVersion,
+      endpoint,
+      method,
+      responseTime,
+      statusCode,
+      timestamp,
+      anonymousId,
+      source,
+    } = req.body;
+
+    console.log(
+      `📊 Telemetry: ${method} ${endpoint} (${responseTime}ms) - ${statusCode}`
+    );
+
+    // Store telemetry data (you can save to database if needed)
+    const telemetryData = {
+      packageVersion,
+      endpoint,
+      method,
+      responseTime,
+      statusCode,
+      timestamp: new Date(timestamp),
+      anonymousId,
+      source,
+      receivedAt: new Date(),
+    };
+
+    // For now, just log it. You can save to database later
+    console.log("Telemetry data:", telemetryData);
+
+    res.json({ success: true, message: "Telemetry received" });
+  } catch (error) {
+    console.error("Telemetry error:", error);
+    res.status(500).json({ error: "Failed to process telemetry" });
+  }
+});
 
 // Health check endpoint
 app.get("/", (req, res) => {
