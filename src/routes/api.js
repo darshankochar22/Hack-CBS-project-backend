@@ -1,21 +1,15 @@
 import express from "express";
 import { body, validationResult } from "express-validator";
-import {
-  apiKeyAuth,
-  optionalApiKeyAuth,
-  checkApiKeyPermissions,
-} from "../middleware/apiKeyAuth.js";
-import { trackUsage } from "../middleware/trackUsage.js";
+import { validateApiKey, optionalApiKey } from "../middleware/apiKeyAuth.js";
 
 const router = express.Router();
 
-// Apply optional API key authentication and usage tracking to all routes
-router.use(optionalApiKeyAuth, trackUsage);
+// Apply API key validation to all routes
+router.use(validateApiKey);
 
-// Example Auth API Routes
+// Auth API Routes
 router.post(
   "/auth/signup",
-  checkApiKeyPermissions(["auth"]),
   [
     body("email")
       .isEmail()
@@ -57,7 +51,6 @@ router.post(
 
 router.post(
   "/auth/login",
-  checkApiKeyPermissions(["auth"]),
   [
     body("email").isEmail().withMessage("Valid email is required"),
     body("password").notEmpty().withMessage("Password is required"),
@@ -94,37 +87,32 @@ router.post(
   }
 );
 
-// Example Database API Routes
-router.get(
-  "/db/query",
-  checkApiKeyPermissions(["database"]),
-  async (req, res) => {
-    try {
-      const { table, limit = 10 } = req.query;
+// Database API Routes
+router.get("/db/query", async (req, res) => {
+  try {
+    const { table, limit = 10 } = req.query;
 
-      // Simulate database query
-      const results = Array.from({ length: Math.min(limit, 10) }, (_, i) => ({
-        id: i + 1,
-        name: `Record ${i + 1}`,
-        createdAt: new Date().toISOString(),
-      }));
+    // Simulate database query
+    const results = Array.from({ length: Math.min(limit, 10) }, (_, i) => ({
+      id: i + 1,
+      name: `Record ${i + 1}`,
+      createdAt: new Date().toISOString(),
+    }));
 
-      res.json({
-        message: "Query executed successfully",
-        table: table || "default",
-        results,
-        count: results.length,
-      });
-    } catch (error) {
-      console.error("Database query error:", error);
-      res.status(500).json({ error: "Internal server error" });
-    }
+    res.json({
+      message: "Query executed successfully",
+      table: table || "default",
+      results,
+      count: results.length,
+    });
+  } catch (error) {
+    console.error("Database query error:", error);
+    res.status(500).json({ error: "Internal server error" });
   }
-);
+});
 
 router.post(
   "/db/insert",
-  checkApiKeyPermissions(["database"]),
   [body("data").isObject().withMessage("Data object is required")],
   async (req, res) => {
     try {
@@ -154,10 +142,9 @@ router.post(
   }
 );
 
-// Example Storage API Routes
+// Storage API Routes
 router.post(
   "/storage/upload",
-  checkApiKeyPermissions(["storage"]),
   [
     body("filename").notEmpty().withMessage("Filename is required"),
     body("content").notEmpty().withMessage("File content is required"),
@@ -195,8 +182,127 @@ router.post(
   }
 );
 
-// API Information endpoint
-router.get("/info", async (req, res) => {
+// Analytics API Routes
+router.get("/analytics/usage", async (req, res) => {
+  try {
+    res.json({
+      message: "Usage statistics retrieved successfully",
+      stats: {
+        totalRequests: 150,
+        successfulRequests: 145,
+        failedRequests: 5,
+        averageResponseTime: 250,
+        last24Hours: {
+          requests: 25,
+          errors: 1,
+        },
+      },
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    console.error("Analytics usage error:", error);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+router.get("/analytics/performance", async (req, res) => {
+  try {
+    res.json({
+      message: "Performance metrics retrieved successfully",
+      metrics: {
+        uptime: "99.9%",
+        averageResponseTime: 250,
+        p95ResponseTime: 500,
+        p99ResponseTime: 1000,
+        requestsPerSecond: 10,
+        memoryUsage: "45%",
+        cpuUsage: "30%",
+      },
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    console.error("Analytics performance error:", error);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+router.get("/analytics/project/:projectId", async (req, res) => {
+  try {
+    const { projectId } = req.params;
+
+    res.json({
+      message: "Project analytics retrieved successfully",
+      projectId,
+      analytics: {
+        totalApiCalls: 100,
+        authCalls: 30,
+        databaseCalls: 50,
+        storageCalls: 20,
+        lastActivity: new Date().toISOString(),
+        monthlyUsage: {
+          requests: 1000,
+          storage: "50MB",
+          bandwidth: "200MB",
+        },
+      },
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    console.error("Project analytics error:", error);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// Storage API Routes
+router.get("/storage/list", async (req, res) => {
+  try {
+    res.json({
+      message: "Files listed successfully",
+      files: [
+        {
+          id: "file_1",
+          filename: "document.pdf",
+          size: 1024000,
+          uploadedAt: new Date().toISOString(),
+          url: "https://storage.example.com/files/file_1",
+        },
+        {
+          id: "file_2",
+          filename: "image.jpg",
+          size: 512000,
+          uploadedAt: new Date().toISOString(),
+          url: "https://storage.example.com/files/file_2",
+        },
+      ],
+      count: 2,
+    });
+  } catch (error) {
+    console.error("Storage list error:", error);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+router.get("/storage/download/:filename", async (req, res) => {
+  try {
+    const { filename } = req.params;
+
+    res.json({
+      message: "File download initiated successfully",
+      file: {
+        filename,
+        url: `https://storage.example.com/files/${filename}`,
+        downloadUrl: `https://storage.example.com/download/${filename}`,
+        expiresAt: new Date(Date.now() + 3600000).toISOString(), // 1 hour
+      },
+    });
+  } catch (error) {
+    console.error("Storage download error:", error);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// API Information endpoint (no auth required for info)
+router.get("/info", optionalApiKey, async (req, res) => {
   const response = {
     message: "BAAS API is running",
     version: "1.0.0",
@@ -204,15 +310,15 @@ router.get("/info", async (req, res) => {
   };
 
   // Add project and API key info if available
-  if (req.project && req.apiKey) {
+  if (req.projectId && req.apiKey) {
     response.project = {
-      id: req.project._id,
-      name: req.project.name,
+      id: req.projectId,
+      name: `Project ${req.projectId}`,
     };
     response.apiKey = {
-      id: req.apiKey._id,
-      name: req.apiKey.name,
-      permissions: req.apiKey.permissions,
+      id: req.apiKey.substring(0, 20) + "...",
+      name: "API Key",
+      permissions: ["auth", "database", "storage"],
     };
   } else {
     response.note = "Testing mode - no API key provided";
